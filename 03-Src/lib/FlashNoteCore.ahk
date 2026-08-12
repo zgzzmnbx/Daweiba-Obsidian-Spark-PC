@@ -31,8 +31,19 @@ class FlashNoteCore {
         return normalized
     }
 
-    static FormatListContent(content, isTodo := false) {
+    static FormatListContent(content, isTodo := false, sourceLabel := "") {
         lines := StrSplit(content, "`n")
+        if (!isTodo && sourceLabel != "") {
+            formatted := "- " sourceLabel " #闪念"
+            for line in lines {
+                if (line = "") {
+                    formatted := RTrim(formatted, " ") "`n"
+                    continue
+                }
+                formatted .= "`n  " line "  "
+            }
+            return formatted
+        }
         prefix := isTodo ? "- [ ] " : "- "
         tags := isTodo ? " #闪念 #待办" : " #闪念"
         formatted := prefix lines[1] tags "  "
@@ -61,6 +72,17 @@ class FlashNoteCore {
         return RegExMatch(Trim(url), "i)^https?://[^\s]+$") = 1
     }
 
+    static SourceClipSentence(url) {
+        url := Trim(url)
+        if (url = "")
+            return ""
+        if !this.IsHttpUrl(url)
+            throw Error("INVALID_SOURCE_URL|来源网址必须以 http:// 或 https:// 开头")
+        if !RegExMatch(url, "i)^https?://(?:www\.)?([^/:?#]+)", &hostMatch)
+            throw Error("INVALID_SOURCE_URL|无法识别来源网址的域名")
+        return "来自" StrLower(hostMatch[1]) "网页的剪藏。"
+    }
+
     static BuildFlashBlock(text, sourceUrl := "", isTodo := false, timestamp := "", randomSuffix := "", contentFormat := "plain_text") {
         content := this.NormalizeFlashText(text)
         if (content = "")
@@ -72,24 +94,29 @@ class FlashNoteCore {
         dateStamp := FormatTime(timestamp, "yyyy-MM-dd HH:mm")
         secondStamp := FormatTime(timestamp, "yyyyMMddHHmmss")
         blockId := "flash-" FormatTime(timestamp, "yyyyMMdd-HHmmss") "-pc"
+        standaloneCodeBlock := contentFormat = "code_block" && !isTodo
+        sourceLabel := !isTodo ? this.SourceClipSentence(sourceUrl) : ""
 
         block := "**大尾巴闪念-" titleStamp "**`n"
-        block .= (contentFormat = "code_block"
-            ? this.FormatCodeBlockListContent(text, isTodo)
-            : this.FormatListContent(content, isTodo)) "`n"
-        block .= "  记录日期:: " dateStamp "`n"
+        block .= (standaloneCodeBlock
+            ? (sourceLabel != "" ? sourceLabel " #闪念" : "#闪念") "`n`n" ClipboardFormatter.BuildCodeFence(text)
+            : contentFormat = "code_block"
+                ? this.FormatCodeBlockListContent(text, isTodo)
+                : this.FormatListContent(content, isTodo, sourceLabel)) "`n"
+        metadataIndent := standaloneCodeBlock ? "" : "  "
+        block .= metadataIndent "记录日期:: " dateStamp "`n"
         if isTodo {
-            block .= "  任务ID:: pc-" secondStamp "-" randomSuffix "`n"
-            block .= "  截止日期::`n"
-            block .= "  提醒时间::`n"
+            block .= metadataIndent "任务ID:: pc-" secondStamp "-" randomSuffix "`n"
+            block .= metadataIndent "截止日期::`n"
+            block .= metadataIndent "提醒时间::`n"
         }
         if (sourceUrl != "") {
             if !this.IsHttpUrl(sourceUrl)
                 throw Error("INVALID_SOURCE_URL|来源网址必须以 http:// 或 https:// 开头")
-            block .= "  来源网址:: " Trim(sourceUrl) "`n"
+            block .= metadataIndent "来源网址:: " Trim(sourceUrl) "`n"
         }
-        block .= "  备注::`n"
-        block .= "  ^" blockId
+        block .= metadataIndent "备注::`n"
+        block .= metadataIndent "^" blockId
 
         return {
             Text: block,
@@ -281,6 +308,35 @@ class FlashNoteCore {
         if (body != "")
             note .= "`n" body "`n"
         return {Text: note, Title: cleanTitle}
+    }
+
+    static BuildNewNoteLinkBlock(vaultPath, notePath, sourceUrl := "", timestamp := "") {
+        if !this.IsPathInside(notePath, vaultPath)
+            throw Error("OUTSIDE_VAULT|新建笔记必须位于 Obsidian Vault 内")
+
+        fullVault := RTrim(this.GetFullPath(vaultPath), "\")
+        fullNote := this.GetFullPath(notePath)
+        relativePath := SubStr(fullNote, StrLen(fullVault) + 2)
+        relativePath := RegExReplace(relativePath, "i)\.md$", "")
+        relativePath := StrReplace(relativePath, "\", "/")
+        SplitPath(fullNote, , , , &displayTitle)
+
+        timestamp := timestamp != "" ? timestamp : A_Now
+        titleStamp := FormatTime(timestamp, "yyyyMMddHHmm")
+        dateStamp := FormatTime(timestamp, "yyyy-MM-dd HH:mm")
+        blockId := "flash-link-" FormatTime(timestamp, "yyyyMMdd-HHmmss") "-pc"
+        sourceLabel := this.SourceClipSentence(sourceUrl)
+
+        block := "**大尾巴闪念-" titleStamp "**`n"
+        block .= "- 新建笔记：[[" relativePath "|" displayTitle "]] #闪念  `n"
+        if (sourceLabel != "")
+            block .= "  " sourceLabel "  `n"
+        block .= "  记录日期:: " dateStamp "`n"
+        if (sourceUrl != "")
+            block .= "  来源网址:: " Trim(sourceUrl) "`n"
+        block .= "  备注::`n"
+        block .= "  ^" blockId
+        return {Text: block, BlockId: blockId}
     }
 
     static CreateNewNote(vaultPath, folderPath, title, body, sourceUrl := "", timestamp := "") {

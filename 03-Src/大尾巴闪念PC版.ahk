@@ -8,7 +8,7 @@ Persistent()
 #Include "lib\BrowserSource.ahk"
 
 class FlashNoteApp {
-    static Version := "0.3.2"
+    static Version := "0.4.0"
 
     __New() {
         SplitPath(A_ScriptDir, , &projectRoot)
@@ -19,6 +19,7 @@ class FlashNoteApp {
         this.StartupShortcut := A_Startup "\大尾巴闪念PC版.lnk"
         this.SettingsGui := ""
         this.NewNoteGui := ""
+        this.UsageGui := ""
         this.ActiveHotkeys := []
         this.HotkeysPaused := false
         this.LastCreatedNote := ""
@@ -47,6 +48,10 @@ class FlashNoteApp {
             NormalHotkey: "^!s",
             TodoHotkey: "^!t",
             NewNoteHotkey: "^!n",
+            NormalEnabled: 1,
+            TodoEnabled: 0,
+            NewNoteEnabled: 1,
+            LinkNewNoteInFlash: 1,
             SourceUrlEnabled: 1,
             BrowserFallback: 1,
             AddressBarCopyFallback: 1,
@@ -70,6 +75,10 @@ class FlashNoteApp {
             NormalHotkey: ConfigStore.Get(values, "Hotkeys", "Normal", defaults.NormalHotkey),
             TodoHotkey: ConfigStore.Get(values, "Hotkeys", "Todo", defaults.TodoHotkey),
             NewNoteHotkey: ConfigStore.Get(values, "Hotkeys", "NewNote", defaults.NewNoteHotkey),
+            NormalEnabled: Integer(ConfigStore.Get(values, "Hotkeys", "NormalEnabled", defaults.NormalEnabled)),
+            TodoEnabled: Integer(ConfigStore.Get(values, "Hotkeys", "TodoEnabled", defaults.TodoEnabled)),
+            NewNoteEnabled: Integer(ConfigStore.Get(values, "Hotkeys", "NewNoteEnabled", defaults.NewNoteEnabled)),
+            LinkNewNoteInFlash: Integer(ConfigStore.Get(values, "NewNote", "LinkInFlashNote", defaults.LinkNewNoteInFlash)),
             SourceUrlEnabled: Integer(ConfigStore.Get(values, "SourceUrl", "Enabled", defaults.SourceUrlEnabled)),
             BrowserFallback: Integer(ConfigStore.Get(values, "SourceUrl", "BrowserFallback", defaults.BrowserFallback)),
             AddressBarCopyFallback: Integer(ConfigStore.Get(values, "SourceUrl", "AddressBarCopyFallback", defaults.AddressBarCopyFallback)),
@@ -85,6 +94,7 @@ class FlashNoteApp {
     ConfigureTray() {
         A_TrayMenu.Delete()
         A_TrayMenu.Add("打开设置", (*) => this.ShowSettings())
+        A_TrayMenu.Add("使用说明", (*) => this.ShowUsageGuide())
         A_TrayMenu.Add("暂停/恢复快捷键", (*) => this.TogglePause())
         A_TrayMenu.Add()
         A_TrayMenu.Add("打开闪念目标笔记", (*) => this.OpenFlashNote())
@@ -95,7 +105,7 @@ class FlashNoteApp {
     }
 
     BuildSettingsGui() {
-        settingsGui := Gui("+MinSize660x600", "大尾巴闪念 PC 版 v" FlashNoteApp.Version)
+        settingsGui := Gui("+MinSize660x650", "大尾巴闪念 PC 版 v" FlashNoteApp.Version)
         settingsGui.SetFont("s10", "Microsoft YaHei UI")
         settingsGui.MarginX := 18
         settingsGui.MarginY := 16
@@ -118,21 +128,29 @@ class FlashNoteApp {
         settingsGui.Add("Button", "x+8 yp-1 w75", "修改").OnEvent("Click", (*) => this.ModifyAnchor())
 
         settingsGui.Add("GroupBox", "xm y+20 w620 h105", "全局快捷键")
-        settingsGui.Add("Text", "xm+14 yp+29 w95", "普通闪念")
-        this.NormalHotkeyControl := settingsGui.Add("Hotkey", "x+0 yp-4 w110", this.Config.NormalHotkey)
-        settingsGui.Add("Text", "x+28 yp+4 w70", "保存待办")
-        this.TodoHotkeyControl := settingsGui.Add("Hotkey", "x+0 yp-4 w110", this.Config.TodoHotkey)
-        settingsGui.Add("Text", "x+28 yp+4 w70", "新建笔记")
-        this.NewNoteHotkeyControl := settingsGui.Add("Hotkey", "x+0 yp-4 w110", this.Config.NewNoteHotkey)
-        settingsGui.Add("Text", "xm+14 y+16 w580 c666666", "默认：Ctrl+Alt+S / Ctrl+Alt+T / Ctrl+Alt+N；不得重复。")
+        this.NormalEnabledCheckbox := settingsGui.Add("CheckBox", "xm+14 yp+28 w85", "普通闪念")
+        this.NormalEnabledCheckbox.Value := this.Config.NormalEnabled
+        this.NormalHotkeyControl := settingsGui.Add("Hotkey", "x+0 yp-4 w90", this.Config.NormalHotkey)
+        this.TodoEnabledCheckbox := settingsGui.Add("CheckBox", "x+20 yp+4 w75", "保存待办")
+        this.TodoEnabledCheckbox.Value := this.Config.TodoEnabled
+        this.TodoHotkeyControl := settingsGui.Add("Hotkey", "x+0 yp-4 w90", this.Config.TodoHotkey)
+        this.NewNoteEnabledCheckbox := settingsGui.Add("CheckBox", "x+20 yp+4 w85", "新建笔记")
+        this.NewNoteEnabledCheckbox.Value := this.Config.NewNoteEnabled
+        this.NewNoteHotkeyControl := settingsGui.Add("Hotkey", "x+0 yp-4 w90", this.Config.NewNoteHotkey)
+        this.NormalEnabledCheckbox.OnEvent("Click", (*) => this.UpdateHotkeyControlStates())
+        this.TodoEnabledCheckbox.OnEvent("Click", (*) => this.UpdateHotkeyControlStates())
+        this.NewNoteEnabledCheckbox.OnEvent("Click", (*) => this.UpdateHotkeyControlStates())
+        settingsGui.Add("Text", "xm+14 y+16 w580 c666666", "勾选表示启用；默认启用普通闪念和新建笔记，已启用项不得重复。")
 
-        settingsGui.Add("GroupBox", "xm y+20 w620 h145", "内容格式、网页来源与启动")
+        settingsGui.Add("GroupBox", "xm y+20 w620 h174", "内容格式、网页来源与启动")
         this.SourceUrlCheckbox := settingsGui.Add("CheckBox", "xm+14 yp+27", "自动附加网页来源网址")
         this.SourceUrlCheckbox.Value := this.Config.SourceUrlEnabled
         this.BrowserFallbackCheckbox := settingsGui.Add("CheckBox", "xm+14 y+14", "剪贴板无来源时，从当前浏览器补取网址")
         this.BrowserFallbackCheckbox.Value := this.Config.BrowserFallback
         this.StartupCheckbox := settingsGui.Add("CheckBox", "x+35 yp", "开机自启")
         this.StartupCheckbox.Value := this.Config.StartWithWindows
+        this.LinkNewNoteCheckbox := settingsGui.Add("CheckBox", "xm+14 y+14", "新建笔记后，在闪念笔记中插入可点击链接")
+        this.LinkNewNoteCheckbox.Value := this.Config.LinkNewNoteInFlash
         settingsGui.Add("Text", "xm+14 y+17 w75", "内容格式")
         this.ContentFormatDropDown := settingsGui.Add("DropDownList", "x+0 yp-4 w280", [
             "智能 Markdown（保留加粗）",
@@ -142,15 +160,18 @@ class FlashNoteApp {
         this.ContentFormatDropDown.Choose(this.ContentFormatIndex(this.Config.ContentFormat))
         settingsGui.Add("Text", "x+12 yp+4 w190 c666666", "代码块不渲染加粗")
 
-        settingsGui.Add("Button", "xm y+22 w125 h34 Default", "保存并应用").OnEvent("Click", (*) => this.SaveSettings())
-        settingsGui.Add("Button", "x+10 yp w110 h34", "测试配置").OnEvent("Click", (*) => this.TestSettings())
-        settingsGui.Add("Button", "x+10 yp w120 h34", "隐藏到托盘").OnEvent("Click", (*) => this.HideSettings())
-        settingsGui.Add("Button", "x+10 yp w90 h34", "打开笔记").OnEvent("Click", (*) => this.OpenFlashNote())
-        settingsGui.Add("Button", "x+10 yp w90 h34", "退出").OnEvent("Click", (*) => this.ExitApplication())
+        settingsGui.Add("Button", "xm y+22 w110 h34 Default", "保存并应用").OnEvent("Click", (*) => this.SaveSettings())
+        settingsGui.Add("Button", "x+8 yp w90 h34", "测试配置").OnEvent("Click", (*) => this.TestSettings())
+        this.UsageButton := settingsGui.Add("Button", "x+8 yp w90 h34", "使用说明")
+        this.UsageButton.OnEvent("Click", (*) => this.ShowUsageGuide())
+        settingsGui.Add("Button", "x+8 yp w105 h34", "隐藏到托盘").OnEvent("Click", (*) => this.HideSettings())
+        settingsGui.Add("Button", "x+8 yp w85 h34", "打开笔记").OnEvent("Click", (*) => this.OpenFlashNote())
+        settingsGui.Add("Button", "x+8 yp w65 h34", "退出").OnEvent("Click", (*) => this.ExitApplication())
 
         settingsGui.OnEvent("Close", (*) => this.HideSettings())
         this.SettingsGui := settingsGui
-        this.UpdateStatus("快捷键已启用")
+        this.UpdateHotkeyControlStates()
+        this.UpdateStatus("已启用 " this.EnabledHotkeyCount(this.Config) " 个快捷键")
     }
 
     ConfigFromControls() {
@@ -162,6 +183,10 @@ class FlashNoteApp {
             NormalHotkey: this.NormalHotkeyControl.Value,
             TodoHotkey: this.TodoHotkeyControl.Value,
             NewNoteHotkey: this.NewNoteHotkeyControl.Value,
+            NormalEnabled: this.NormalEnabledCheckbox.Value ? 1 : 0,
+            TodoEnabled: this.TodoEnabledCheckbox.Value ? 1 : 0,
+            NewNoteEnabled: this.NewNoteEnabledCheckbox.Value ? 1 : 0,
+            LinkNewNoteInFlash: this.LinkNewNoteCheckbox.Value ? 1 : 0,
             SourceUrlEnabled: this.SourceUrlCheckbox.Value ? 1 : 0,
             BrowserFallback: this.BrowserFallbackCheckbox.Value ? 1 : 0,
             AddressBarCopyFallback: 1,
@@ -176,6 +201,18 @@ class FlashNoteApp {
         if (mode = ClipboardFormatter.PlainText)
             return 3
         return 1
+    }
+
+    UpdateHotkeyControlStates() {
+        this.NormalHotkeyControl.Enabled := !!this.NormalEnabledCheckbox.Value
+        this.TodoHotkeyControl.Enabled := !!this.TodoEnabledCheckbox.Value
+        this.NewNoteHotkeyControl.Enabled := !!this.NewNoteEnabledCheckbox.Value
+    }
+
+    EnabledHotkeyCount(config) {
+        return (config.NormalEnabled ? 1 : 0)
+            + (config.TodoEnabled ? 1 : 0)
+            + (config.NewNoteEnabled ? 1 : 0)
     }
 
     ContentFormatFromIndex(index) {
@@ -226,13 +263,16 @@ class FlashNoteApp {
                     errors.Push("闪念目标笔记必须位于 Vault 内")
             }
         }
-        hotkeys := [config.NormalHotkey, config.TodoHotkey, config.NewNoteHotkey]
-        for key in hotkeys {
-            if (key = "")
-                errors.Push("三组快捷键都不能为空")
-        }
-        if (config.NormalHotkey = config.TodoHotkey || config.NormalHotkey = config.NewNoteHotkey || config.TodoHotkey = config.NewNoteHotkey)
-            errors.Push("三组快捷键不能重复")
+        if (config.NormalEnabled && config.NormalHotkey = "")
+            errors.Push("已启用的普通闪念快捷键不能为空")
+        if (config.TodoEnabled && config.TodoHotkey = "")
+            errors.Push("已启用的保存待办快捷键不能为空")
+        if (config.NewNoteEnabled && config.NewNoteHotkey = "")
+            errors.Push("已启用的新建笔记快捷键不能为空")
+        if ((config.NormalEnabled && config.TodoEnabled && config.NormalHotkey = config.TodoHotkey)
+            || (config.NormalEnabled && config.NewNoteEnabled && config.NormalHotkey = config.NewNoteHotkey)
+            || (config.TodoEnabled && config.NewNoteEnabled && config.TodoHotkey = config.NewNoteHotkey))
+            errors.Push("已启用的快捷键不能重复")
         return errors
     }
 
@@ -254,7 +294,7 @@ class FlashNoteApp {
             this.WriteConfig(candidate)
             this.UpdateStartup(candidate.StartWithWindows)
             this.Config := candidate
-            this.UpdateStatus("设置已保存，三个快捷键正在监听")
+            this.UpdateStatus("设置已保存，已启用 " this.EnabledHotkeyCount(candidate) " 个快捷键")
             this.Notify("设置已保存并生效")
             this.Log("settings_save", "ok", "", "none")
         } catch as err {
@@ -279,12 +319,18 @@ class FlashNoteApp {
         this.DisableActiveHotkeys()
         registered := []
         try {
-            this.RegisterHotkey(config.NormalHotkey, this.CaptureNormal.Bind(this))
-            registered.Push(config.NormalHotkey)
-            this.RegisterHotkey(config.TodoHotkey, this.CaptureTodo.Bind(this))
-            registered.Push(config.TodoHotkey)
-            this.RegisterHotkey(config.NewNoteHotkey, this.ShowNewNote.Bind(this))
-            registered.Push(config.NewNoteHotkey)
+            if config.NormalEnabled {
+                this.RegisterHotkey(config.NormalHotkey, this.CaptureNormal.Bind(this))
+                registered.Push(config.NormalHotkey)
+            }
+            if config.TodoEnabled {
+                this.RegisterHotkey(config.TodoHotkey, this.CaptureTodo.Bind(this))
+                registered.Push(config.TodoHotkey)
+            }
+            if config.NewNoteEnabled {
+                this.RegisterHotkey(config.NewNoteHotkey, this.ShowNewNote.Bind(this))
+                registered.Push(config.NewNoteHotkey)
+            }
             this.ActiveHotkeys := registered
             this.HotkeysPaused := false
             return ""
@@ -295,10 +341,20 @@ class FlashNoteApp {
             this.ActiveHotkeys := []
             if (previousKeys.Length > 0) {
                 try {
-                    this.RegisterHotkey(previousConfig.NormalHotkey, this.CaptureNormal.Bind(this))
-                    this.RegisterHotkey(previousConfig.TodoHotkey, this.CaptureTodo.Bind(this))
-                    this.RegisterHotkey(previousConfig.NewNoteHotkey, this.ShowNewNote.Bind(this))
-                    this.ActiveHotkeys := previousKeys
+                    restored := []
+                    if previousConfig.NormalEnabled {
+                        this.RegisterHotkey(previousConfig.NormalHotkey, this.CaptureNormal.Bind(this))
+                        restored.Push(previousConfig.NormalHotkey)
+                    }
+                    if previousConfig.TodoEnabled {
+                        this.RegisterHotkey(previousConfig.TodoHotkey, this.CaptureTodo.Bind(this))
+                        restored.Push(previousConfig.TodoHotkey)
+                    }
+                    if previousConfig.NewNoteEnabled {
+                        this.RegisterHotkey(previousConfig.NewNoteHotkey, this.ShowNewNote.Bind(this))
+                        restored.Push(previousConfig.NewNoteHotkey)
+                    }
+                    this.ActiveHotkeys := restored
                 }
             }
             return "无法启用快捷键，可能已被其他程序占用：`n" this.UserMessage(err)
@@ -421,18 +477,40 @@ class FlashNoteApp {
 
     CreateNoteFromDialog(sourceMethod) {
         try {
+            sourceUrl := Trim(this.NewSourceEdit.Value)
             targetPath := FlashNoteCore.CreateNewNote(
                 this.Config.Vault,
                 Trim(this.NewFolderDialogEdit.Value),
                 this.NewTitleEdit.Value,
                 this.NewBodyEdit.Value,
-                Trim(this.NewSourceEdit.Value)
+                sourceUrl
             )
             this.LastCreatedNote := targetPath
             fileName := ""
             SplitPath(targetPath, &fileName)
+            if this.Config.LinkNewNoteInFlash {
+                try {
+                    linkBlock := FlashNoteCore.BuildNewNoteLinkBlock(this.Config.Vault, targetPath, sourceUrl)
+                    FlashNoteCore.SafeInsertFile(
+                        this.Config.FlashNote,
+                        this.Config.Anchor,
+                        linkBlock.Text,
+                        linkBlock.BlockId
+                    )
+                } catch as linkError {
+                    this.CloseNewNoteDialog()
+                    MsgBox(
+                        "笔记已创建：`n" targetPath
+                            . "`n`n但写入闪念笔记的链接失败：`n" this.UserMessage(linkError),
+                        "笔记已创建，链接未写入",
+                        "Icon!"
+                    )
+                    this.Log("create_note_link", "error", this.ErrorCode(linkError), sourceMethod)
+                    return
+                }
+            }
             this.CloseNewNoteDialog()
-            this.Notify("笔记已创建：" fileName)
+            this.Notify(this.Config.LinkNewNoteInFlash ? "笔记已创建并写入闪念链接：" fileName : "笔记已创建：" fileName)
             this.Log("create_note", "ok", "", sourceMethod)
         } catch as err {
             MsgBox(this.UserMessage(err), "新建笔记失败", "Iconx")
@@ -499,8 +577,48 @@ class FlashNoteApp {
         }
     }
 
+    ShowUsageGuide() {
+        if IsObject(this.UsageGui) {
+            try {
+                this.UsageGui.Show()
+                WinActivate("ahk_id " this.UsageGui.Hwnd)
+                return
+            }
+        }
+
+        usageGui := Gui("+MinSize680x520", "大尾巴闪念 PC 版使用说明")
+        usageGui.SetFont("s10", "Microsoft YaHei UI")
+        usageGui.MarginX := 18
+        usageGui.MarginY := 16
+        usageGui.Add("Text", "xm w640 c1F4E79", "复制文字后，按已启用的快捷键即可保存到 Obsidian")
+        guide := "一、默认快捷键`r`n"
+            . "1. Ctrl + Alt + S：保存普通闪念（默认启用）`r`n"
+            . "2. Ctrl + Alt + T：保存待办（默认关闭）`r`n"
+            . "3. Ctrl + Alt + N：新建独立笔记（默认启用）`r`n`r`n"
+            . "二、普通闪念`r`n"
+            . "默认使用 Markdown 代码块。网页剪藏会增加“来自域名网页的剪藏。”，并保留来源网址。`r`n`r`n"
+            . "三、保存待办`r`n"
+            . "生成 Obsidian Tasks 可识别的未完成任务；需要时先在设置中勾选启用。`r`n`r`n"
+            . "四、新建笔记`r`n"
+            . "弹窗中可修改标题、正文、来源网址和目录。默认创建后，会在闪念目标笔记锚点下插入可点击的 Obsidian 链接。`r`n`r`n"
+            . "五、设置与安全`r`n"
+            . "路径只能通过“选择”修改，插入锚点只能通过“修改”更新。保存前可点击“测试配置”；锚点必须在目标笔记中恰好出现一次。"
+        this.UsageText := usageGui.Add("Text", "xm y+12 w640 h410", guide)
+        usageGui.Add("Button", "xm y+14 w90 h32 Default", "关闭").OnEvent("Click", (*) => this.CloseUsageGuide())
+        usageGui.OnEvent("Close", (*) => this.CloseUsageGuide())
+        this.UsageGui := usageGui
+        usageGui.Show("w680 h520")
+    }
+
+    CloseUsageGuide() {
+        if IsObject(this.UsageGui) {
+            try this.UsageGui.Destroy()
+        }
+        this.UsageGui := ""
+    }
+
     ShowSettings() {
-        this.SettingsGui.Show("w660 h600")
+        this.SettingsGui.Show("w660 h650")
         WinActivate("ahk_id " this.SettingsGui.Hwnd)
     }
 
@@ -614,6 +732,22 @@ if (uiSmokeCheck || newNoteSmokeCheck) {
         DabaweiFlashNoteApp.Start()
         if (DabaweiFlashNoteApp.ContentFormatDropDown.Value != DabaweiFlashNoteApp.ContentFormatIndex(DabaweiFlashNoteApp.Config.ContentFormat))
             throw Error("content format dropdown mismatch")
+        if (DabaweiFlashNoteApp.Config.ContentFormat != ClipboardFormatter.CodeBlock)
+            throw Error("markdown code block is not the default mode")
+        if (DabaweiFlashNoteApp.NormalEnabledCheckbox.Value != 1
+            || DabaweiFlashNoteApp.TodoEnabledCheckbox.Value != 0
+            || DabaweiFlashNoteApp.NewNoteEnabledCheckbox.Value != 1)
+            throw Error("default hotkey switches mismatch")
+        if (DabaweiFlashNoteApp.ActiveHotkeys.Length != 2)
+            throw Error("enabled hotkey registration count mismatch")
+        if DabaweiFlashNoteApp.TodoHotkeyControl.Enabled
+            throw Error("disabled todo hotkey control remains enabled")
+        if (DabaweiFlashNoteApp.LinkNewNoteCheckbox.Value != 1)
+            throw Error("new note link switch is not enabled")
+        DabaweiFlashNoteApp.ShowUsageGuide()
+        if !InStr(DabaweiFlashNoteApp.UsageText.Text, "Ctrl + Alt + S")
+            throw Error("usage guide content missing")
+        DabaweiFlashNoteApp.CloseUsageGuide()
         for control in [
             DabaweiFlashNoteApp.FlashPathEdit,
             DabaweiFlashNoteApp.NewFolderEdit,

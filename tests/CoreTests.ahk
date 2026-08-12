@@ -55,7 +55,7 @@ normal := FlashNoteCore.BuildFlashBlock(
     "a1b2"
 )
 AssertTrue(InStr(normal.Text, "**大尾巴闪念-202608121530**"), "normal title")
-AssertTrue(InStr(normal.Text, "- 第一行 #闪念  `n  第二行`n`n  第三段  `n  第四行  `n"), "normal paragraphs")
+AssertTrue(InStr(normal.Text, "- 来自example.com网页的剪藏。 #闪念`n  第一行  `n  第二行`n`n  第三段  `n  第四行  `n"), "normal source label and paragraphs")
 AssertTrue(!InStr(normal.Text, " / "), "normal does not flatten newlines")
 AssertTrue(InStr(normal.Text, "来源网址:: https://example.com/a?b=1"), "normal source url")
 AssertEqual("flash-20260812-153045-pc", normal.BlockId, "normal block id")
@@ -73,19 +73,24 @@ richMarkdown := ClipboardFormatter.HtmlToMarkdown(richHtml)
 AssertTrue(InStr(richMarkdown, "**Codex 这句加粗**"), "html strong to markdown bold")
 AssertTrue(InStr(richMarkdown, "普通文字`n`n第二段 & 符号"), "html paragraphs and entities")
 smartFlash := FlashNoteCore.BuildFlashBlock(richMarkdown, "https://example.com/rich", false, "20260812153102", "e5f6", ClipboardFormatter.SmartMarkdown)
-AssertTrue(InStr(smartFlash.Text, "- **Codex 这句加粗** #闪念"), "smart markdown bold in flash")
+AssertTrue(InStr(smartFlash.Text, "- 来自example.com网页的剪藏。 #闪念`n  **Codex 这句加粗**"), "smart markdown source label and bold")
 
 fence3 := Chr(96) Chr(96) Chr(96)
 fence4 := fence3 Chr(96)
 fenced := ClipboardFormatter.BuildCodeFence("line 1`n" fence3 "nested" fence3)
 AssertTrue(InStr(fenced, fence4 "markdown`nline 1`n" fence3 "nested" fence3 "`n" fence4), "code fence expands for nested backticks")
-codeFlash := FlashNoteCore.BuildFlashBlock("**保留为源码**`n第二行", "", false, "20260812153103", "f607", ClipboardFormatter.CodeBlock)
-AssertTrue(InStr(codeFlash.Text, "- #闪念`n`n  " fence3 "markdown`n  **保留为源码**`n  第二行`n  " fence3), "flash markdown code block")
+codeFlash := FlashNoteCore.BuildFlashBlock("**保留为源码**`n第二行", "https://example.com/code", false, "20260812153103", "f607", ClipboardFormatter.CodeBlock)
+AssertTrue(InStr(codeFlash.Text, "来自example.com网页的剪藏。 #闪念`n`n" fence3 "markdown`n**保留为源码**`n第二行`n" fence3), "normal flash source label and top-level markdown code block")
+AssertTrue(!InStr(codeFlash.Text, "  " fence3 "markdown"), "normal code fence has no list indent")
+AssertTrue(InStr(codeFlash.Text, fence3 "`n记录日期:: 2026-08-12 15:31`n来源网址:: https://example.com/code`n备注::`n^flash-20260812-153103-pc"), "normal code metadata is top-level")
+todoCodeFlash := FlashNoteCore.BuildFlashBlock("任务正文`n补充说明", "", true, "20260812153105", "1829", ClipboardFormatter.CodeBlock)
+AssertTrue(InStr(todoCodeFlash.Text, "- [ ] #闪念 #待办`n`n  " fence3 "markdown`n  任务正文`n  补充说明`n  " fence3), "todo code block remains nested task")
+AssertTrue(InStr(todoCodeFlash.Text, "  记录日期:: 2026-08-12 15:31`n  任务ID:: pc-20260812153105-1829"), "todo code metadata remains nested")
 standaloneCode := ClipboardFormatter.PrepareStandalone("原样内容", "", ClipboardFormatter.CodeBlock)
 AssertEqual(fence3 "markdown`n原样内容`n" fence3, standaloneCode, "standalone markdown code block")
 richCodeInput := ClipboardFormatter.PrepareFlashText("纯文本兜底", richHtml, ClipboardFormatter.CodeBlock)
 richCodeFlash := FlashNoteCore.BuildFlashBlock(richCodeInput, "", false, "20260812153104", "0718", ClipboardFormatter.CodeBlock)
-AssertTrue(InStr(richCodeFlash.Text, fence3 "markdown`n  **Codex 这句加粗**"), "code block keeps recognized bold markdown source")
+AssertTrue(InStr(richCodeFlash.Text, fence3 "markdown`n**Codex 这句加粗**"), "code block keeps recognized bold markdown source")
 styledBoldHtml := "<!--StartFragment--><div><span style=" Chr(34) "font-weight: 700; color: rgb(255,255,255)" Chr(34) ">Codex 这个用法一定要改，结果会好一个量级</span></div><!--EndFragment-->"
 styledBoldMarkdown := ClipboardFormatter.HtmlToMarkdown(styledBoldHtml)
 AssertEqual("**Codex 这个用法一定要改，结果会好一个量级**", styledBoldMarkdown, "inline font weight to markdown bold")
@@ -124,6 +129,16 @@ secondPath := FlashNoteCore.CreateNewNote(testRoot, noteFolder, "测试：标题
 AssertTrue(notePath != secondPath && FileExist(secondPath), "new note no overwrite")
 AssertThrows(() => FlashNoteCore.CreateNewNote(noteFolder, testRoot, "越界", "", "", "20260812153300"), "OUTSIDE_VAULT", "reject outside vault")
 
+linkBlock := FlashNoteCore.BuildNewNoteLinkBlock(testRoot, notePath, "https://www.example.com/article", "20260812153400")
+AssertTrue(InStr(linkBlock.Text, "[[notes/测试：标题|测试：标题]]"), "new note backlink uses vault-relative wikilink")
+AssertTrue(InStr(linkBlock.Text, "来自example.com网页的剪藏。"), "new note backlink source label")
+AssertEqual("flash-link-20260812-153400-pc", linkBlock.BlockId, "new note backlink block id")
+AssertThrows(() => FlashNoteCore.BuildNewNoteLinkBlock(noteFolder, testRoot "\outside.md", "", "20260812153400"), "OUTSIDE_VAULT", "reject backlink outside vault")
+linkInbox := testRoot "\link-inbox.md"
+FlashNoteCore.WriteUtf8File(linkInbox, "# Link Inbox`n`n" FlashNoteCore.DefaultAnchor "`n", false)
+FlashNoteCore.SafeInsertFile(linkInbox, FlashNoteCore.DefaultAnchor, linkBlock.Text, linkBlock.BlockId)
+AssertTrue(InStr(FlashNoteCore.ReadUtf8File(linkInbox), "[[notes/测试：标题|测试：标题]]"), "new note backlink safe insert")
+
 configPath := testRoot "\unicode-config.ini"
 configFixture := {
     Vault: "C:\OBS\Damon",
@@ -133,6 +148,10 @@ configFixture := {
     NormalHotkey: "^!s",
     TodoHotkey: "^!t",
     NewNoteHotkey: "^!n",
+    NormalEnabled: 1,
+    TodoEnabled: 0,
+    NewNoteEnabled: 1,
+    LinkNewNoteInFlash: 1,
     SourceUrlEnabled: 1,
     BrowserFallback: 1,
     AddressBarCopyFallback: 1,
@@ -145,6 +164,10 @@ AssertEqual(configFixture.FlashNote, ConfigStore.Get(configValues, "Paths", "Fla
 AssertEqual(configFixture.NewNoteFolder, ConfigStore.Get(configValues, "Paths", "NewNoteFolder"), "unicode config note folder")
 AssertEqual(configFixture.Anchor, ConfigStore.Get(configValues, "Write", "Anchor"), "config custom anchor")
 AssertEqual("^!n", ConfigStore.Get(configValues, "Hotkeys", "NewNote"), "config hotkey")
+AssertEqual("1", ConfigStore.Get(configValues, "Hotkeys", "NormalEnabled"), "config normal enabled")
+AssertEqual("0", ConfigStore.Get(configValues, "Hotkeys", "TodoEnabled"), "config todo disabled")
+AssertEqual("1", ConfigStore.Get(configValues, "Hotkeys", "NewNoteEnabled"), "config new note enabled")
+AssertEqual("1", ConfigStore.Get(configValues, "NewNote", "LinkInFlashNote"), "config new note link enabled")
 AssertEqual(ClipboardFormatter.SmartMarkdown, ConfigStore.Get(configValues, "Content", "Format"), "config content format")
 AssertTrue(!FlashNoteCore.HasUtf8Bom(configPath), "config utf8 raw")
 
