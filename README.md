@@ -201,7 +201,7 @@ logs/flashnote-pc.log        # 不含正文和完整网址的运行日志
 - 真实 Vault：普通闪念、待办、来源网址、新建笔记和图片嵌入均已由 Obsidian CLI 读取确认；v0.5.0 图片验收文件已移入回收站，正式闪念笔记哈希保持不变。v0.5.1 进一步统一使用 Obsidian 原生 `|300` 显示宽度参数。
 - 浏览器：Edge 的 UIA 和地址栏复制兜底已实机通过；Chrome 与 Firefox 保留最终人工实机复核。
 - GitHub：源码备份仓库为 [zgzzmnbx/Daweiba-Obsidian-Spark-PC](https://github.com/zgzzmnbx/Daweiba-Obsidian-Spark-PC)，主分支为 `main`。
-- Release：当前 GitHub Release 仍为 `v0.3.2`；v0.5.1 已完成本地开发与验收，尚未推送或发布。程序本体仍只交付 `.ahk` 源码，不提供编译 EXE。
+- Release：当前 GitHub Release 仍为 `v0.3.2`；v0.5.1 已完成开发、验收并推送 GitHub `main`，尚未发布新 Release。程序本体仍只交付 `.ahk` 源码，不提供编译 EXE。
 - 下一步：大尾巴直接试用三个快捷键；如果日常使用 Chrome，再做一次来源网址人工确认即可。
 
 详细产品规则见 [产品总览 PRD](00-docs/00-PRD/01-产品总览PRD.md)，图片能力基线见 [v0.5.0 测试记录](00-docs/08-测试记录-v0.5.0-【codex】.md)，本次显示宽度验证见 [v0.5.1 测试记录](00-docs/09-测试记录-v0.5.1-【codex】.md)。
