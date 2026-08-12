@@ -6,9 +6,10 @@ Persistent()
 #Include "lib\ClipboardFormatter.ahk"
 #Include "lib\ConfigStore.ahk"
 #Include "lib\BrowserSource.ahk"
+#Include "lib\ImageClipboard.ahk"
 
 class FlashNoteApp {
-    static Version := "0.4.1"
+    static Version := "0.5.0"
 
     __New() {
         SplitPath(A_ScriptDir, , &projectRoot)
@@ -20,6 +21,7 @@ class FlashNoteApp {
         this.SettingsGui := ""
         this.NewNoteGui := ""
         this.UsageGui := ""
+        this.PendingNewNoteImage := ""
         this.ActiveHotkeys := []
         this.HotkeysPaused := false
         this.LastCreatedNote := ""
@@ -396,10 +398,26 @@ class FlashNoteApp {
     CaptureToFlashNote(isTodo) {
         action := isTodo ? "capture_todo" : "capture_normal"
         sourceMethod := "none"
+        image := ""
         try {
             plainText := A_Clipboard
+            if ImageClipboard.HasImage(plainText) {
+                image := ImageClipboard.SaveToVault(this.Config.Vault, plainText)
+                source := this.ResolveSourceUrl()
+                sourceMethod := source.Method
+                block := FlashNoteCore.BuildImageFlashBlock(image.RelativePath, source.Url, isTodo)
+                FlashNoteCore.SafeInsertFile(
+                    this.Config.FlashNote,
+                    this.Config.Anchor,
+                    block.Text,
+                    block.BlockId
+                )
+                this.Notify(isTodo ? "图片待办已保存" : "图片闪念已保存")
+                this.Log(action, "ok", "", sourceMethod)
+                return
+            }
             if (Trim(plainText) = "")
-                throw Error("EMPTY_CLIPBOARD|剪贴板没有可保存的文字")
+                throw Error("EMPTY_CLIPBOARD|剪贴板没有可保存的文字或图片")
             cfHtml := (this.Config.ContentFormat = ClipboardFormatter.SmartMarkdown
                 || this.Config.ContentFormat = ClipboardFormatter.CodeBlock)
                 ? BrowserSource.ReadClipboardHtml()
@@ -418,6 +436,7 @@ class FlashNoteApp {
             this.Notify(message)
             this.Log(action, "ok", "", sourceMethod)
         } catch as err {
+            this.DeleteCreatedImage(image)
             this.Notify(this.UserMessage(err), true)
             this.Log(action, "error", this.ErrorCode(err), sourceMethod)
         }
@@ -433,8 +452,18 @@ class FlashNoteApp {
     }
 
     ShowNewNote(*) {
+        image := ""
         try {
+            this.CloseNewNoteDialog()
             plainText := A_Clipboard
+            if ImageClipboard.HasImage(plainText) {
+                image := ImageClipboard.SaveToVault(this.Config.Vault, plainText)
+                source := this.ResolveSourceUrl()
+                suggestedTitle := "图片剪藏-" FormatTime(A_Now, "yyyyMMdd-HHmmss")
+                this.OpenNewNoteDialog(image.Embed, source, suggestedTitle)
+                this.PendingNewNoteImage := image
+                return
+            }
             cfHtml := (this.Config.ContentFormat = ClipboardFormatter.SmartMarkdown
                 || this.Config.ContentFormat = ClipboardFormatter.CodeBlock)
                 ? BrowserSource.ReadClipboardHtml()
@@ -443,6 +472,7 @@ class FlashNoteApp {
             source := this.ResolveSourceUrl()
             this.OpenNewNoteDialog(text, source, FlashNoteCore.SuggestTitle(plainText))
         } catch as err {
+            this.DeleteCreatedImage(image)
             this.Notify(this.UserMessage(err), true)
             this.Log("new_note_dialog", "error", this.ErrorCode(err), "none")
         }
@@ -486,6 +516,7 @@ class FlashNoteApp {
                 sourceUrl
             )
             this.LastCreatedNote := targetPath
+            this.PendingNewNoteImage := ""
             fileName := ""
             SplitPath(targetPath, &fileName)
             if this.Config.LinkNewNoteInFlash {
@@ -523,6 +554,14 @@ class FlashNoteApp {
             try this.NewNoteGui.Destroy()
         }
         this.NewNoteGui := ""
+        this.DeleteCreatedImage(this.PendingNewNoteImage)
+        this.PendingNewNoteImage := ""
+    }
+
+    DeleteCreatedImage(image) {
+        if IsObject(image) && image.Created && FileExist(image.FullPath) {
+            try FileDelete(image.FullPath)
+        }
     }
 
     SelectDialogFolder() {
@@ -586,28 +625,29 @@ class FlashNoteApp {
             }
         }
 
-        usageGui := Gui("+MinSize680x520", "大尾巴闪念 PC 版使用说明")
+        usageGui := Gui("+MinSize680x560", "大尾巴闪念 PC 版使用说明")
         usageGui.SetFont("s10", "Microsoft YaHei UI")
         usageGui.MarginX := 18
         usageGui.MarginY := 16
-        usageGui.Add("Text", "xm w640 c1F4E79", "复制文字后，按已启用的快捷键即可保存到 Obsidian")
+        usageGui.Add("Text", "xm w640 c1F4E79", "复制文字或图片后，按已启用的快捷键即可保存到 Obsidian")
         guide := "一、默认快捷键`r`n"
             . "1. Ctrl + Alt + S：保存普通闪念（默认启用）`r`n"
             . "2. Ctrl + Alt + T：保存待办（默认关闭）`r`n"
             . "3. Ctrl + Alt + N：新建独立笔记（默认启用）`r`n`r`n"
             . "二、普通闪念`r`n"
-            . "默认使用 Markdown 代码块。网页剪藏会增加“来自域名网页的剪藏。”，并保留来源网址。`r`n`r`n"
+            . "默认使用 Markdown 代码块。网页剪藏会增加“来自域名网页的剪藏。”，并保留来源网址。`r`n"
+            . "复制图片或图片文件后保存，会复制到 Vault 的 Obsidian 附件目录，并插入可见图片。`r`n`r`n"
             . "三、保存待办`r`n"
             . "生成 Obsidian Tasks 可识别的未完成任务；需要时先在设置中勾选启用。`r`n`r`n"
             . "四、新建笔记`r`n"
             . "弹窗中可修改标题、正文、来源网址和目录。默认创建后，会在闪念目标笔记锚点下插入可点击的 Obsidian 链接。`r`n`r`n"
             . "五、设置与安全`r`n"
             . "路径只能通过“选择”修改，插入锚点只能通过“修改”更新。保存前可点击“测试配置”；锚点必须在目标笔记中恰好出现一次。"
-        this.UsageText := usageGui.Add("Text", "xm y+12 w640 h410", guide)
+        this.UsageText := usageGui.Add("Text", "xm y+12 w640 h450", guide)
         usageGui.Add("Button", "xm y+14 w90 h32 Default", "关闭").OnEvent("Click", (*) => this.CloseUsageGuide())
         usageGui.OnEvent("Close", (*) => this.CloseUsageGuide())
         this.UsageGui := usageGui
-        usageGui.Show("w680 h520")
+        usageGui.Show("w680 h560")
     }
 
     CloseUsageGuide() {
@@ -691,6 +731,7 @@ class FlashNoteApp {
     }
 
     ExitApplication() {
+        this.CloseNewNoteDialog()
         this.Log("app_exit", "ok", "", "none")
         ExitApp()
     }
@@ -762,6 +803,7 @@ if (uiSmokeCheck || newNoteSmokeCheck) {
             throw Error("new note link switch is not enabled")
         DabaweiFlashNoteApp.ShowUsageGuide()
         if !InStr(DabaweiFlashNoteApp.UsageText.Text, "Ctrl + Alt + S")
+            || !InStr(DabaweiFlashNoteApp.UsageText.Text, "复制图片")
             throw Error("usage guide content missing")
         DabaweiFlashNoteApp.CloseUsageGuide()
         for control in [
