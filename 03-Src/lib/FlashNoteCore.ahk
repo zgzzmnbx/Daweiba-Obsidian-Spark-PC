@@ -2,6 +2,7 @@
 
 class FlashNoteCore {
     static DefaultAnchor := "<!-- DABAWEI_FLASHNOTE_INBOX -->"
+    static DefaultImageWidth := 300
 
     static NormalizeLineEndings(text) {
         text := StrReplace(text, "`r`n", "`n")
@@ -125,10 +126,15 @@ class FlashNoteCore {
         }
     }
 
-    static BuildImageFlashBlock(imageRelativePath, sourceUrl := "", isTodo := false, timestamp := "", randomSuffix := "") {
+    static BuildImageEmbed(imageRelativePath) {
         imageRelativePath := Trim(StrReplace(imageRelativePath, "\", "/"), " /")
         if (imageRelativePath = "" || InStr(imageRelativePath, "]]"))
             throw Error("INVALID_IMAGE_PATH|图片附件路径无效")
+        return "![[" imageRelativePath "|" this.DefaultImageWidth "]]"
+    }
+
+    static BuildImageFlashBlock(imageRelativePath, sourceUrl := "", isTodo := false, timestamp := "", randomSuffix := "") {
+        embed := this.BuildImageEmbed(imageRelativePath)
 
         timestamp := timestamp != "" ? timestamp : A_Now
         randomSuffix := randomSuffix != "" ? randomSuffix : Format("{:04x}", Random(0, 65535))
@@ -137,8 +143,6 @@ class FlashNoteCore {
         secondStamp := FormatTime(timestamp, "yyyyMMddHHmmss")
         blockId := "flash-image-" FormatTime(timestamp, "yyyyMMdd-HHmmss") "-pc"
         sourceLabel := !isTodo ? this.SourceClipSentence(sourceUrl) : ""
-        embed := "![[" imageRelativePath "]]"
-
         block := "**大尾巴闪念-" titleStamp "**`n"
         if isTodo {
             block .= "- [ ] 图片剪藏 #闪念 #待办  `n"

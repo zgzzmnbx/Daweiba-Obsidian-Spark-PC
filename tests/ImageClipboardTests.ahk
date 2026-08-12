@@ -44,7 +44,7 @@ try {
     copied := ImageClipboard.SaveToVault(pathVault, saved.FullPath, "20260812154100", "5d7e")
     if !FileExist(copied.FullPath) || FileGetSize(copied.FullPath) != FileGetSize(saved.FullPath)
         throw Error("有效 PNG 路径未复制到另一个 Vault")
-    if (copied.Embed != "![[assets/大尾巴闪念图片-20260812-154100-5d7e.png]]")
+    if (copied.Embed != "![[assets/大尾巴闪念图片-20260812-154100-5d7e.png|300]]")
         throw Error("有效 PNG 路径未生成 Obsidian 嵌入")
     FlashNoteCore.WriteUtf8File(resultPath, "PASS raw_bitmap_to_png_and_image_path " FileGetSize(saved.FullPath) " bytes`n", false)
     ExitApp(0)

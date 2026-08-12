@@ -9,7 +9,7 @@ Persistent()
 #Include "lib\ImageClipboard.ahk"
 
 class FlashNoteApp {
-    static Version := "0.5.0"
+    static Version := "0.5.1"
 
     __New() {
         SplitPath(A_ScriptDir, , &projectRoot)
@@ -636,7 +636,7 @@ class FlashNoteApp {
             . "3. Ctrl + Alt + N：新建独立笔记（默认启用）`r`n`r`n"
             . "二、普通闪念`r`n"
             . "默认使用 Markdown 代码块。网页剪藏会增加“来自域名网页的剪藏。”，并保留来源网址。`r`n"
-            . "复制图片或图片文件后保存，会复制到 Vault 的 Obsidian 附件目录，并插入可见图片。`r`n`r`n"
+            . "复制图片或图片文件后保存，会复制到 Vault 的 Obsidian 附件目录，并默认按 300 像素宽度显示；原图文件不会缩放。`r`n`r`n"
             . "三、保存待办`r`n"
             . "生成 Obsidian Tasks 可识别的未完成任务；需要时先在设置中勾选启用。`r`n`r`n"
             . "四、新建笔记`r`n"
@@ -804,6 +804,7 @@ if (uiSmokeCheck || newNoteSmokeCheck) {
         DabaweiFlashNoteApp.ShowUsageGuide()
         if !InStr(DabaweiFlashNoteApp.UsageText.Text, "Ctrl + Alt + S")
             || !InStr(DabaweiFlashNoteApp.UsageText.Text, "复制图片")
+            || !InStr(DabaweiFlashNoteApp.UsageText.Text, "300 像素")
             throw Error("usage guide content missing")
         DabaweiFlashNoteApp.CloseUsageGuide()
         for control in [

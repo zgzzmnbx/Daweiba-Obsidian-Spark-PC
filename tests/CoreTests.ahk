@@ -141,10 +141,11 @@ FlashNoteCore.SafeInsertFile(linkInbox, FlashNoteCore.DefaultAnchor, linkBlock.T
 AssertTrue(InStr(FlashNoteCore.ReadUtf8File(linkInbox), "[[notes/测试：标题|测试：标题]]"), "new note backlink safe insert")
 
 imageBlock := FlashNoteCore.BuildImageFlashBlock("assets/测试图片.png", "https://example.com/image", false, "20260812153500", "193a")
-AssertTrue(InStr(imageBlock.Text, "来自example.com网页的剪藏。 #闪念`n`n![[assets/测试图片.png]]"), "image flash uses Obsidian embed")
+AssertEqual("![[assets/测试图片.png|300]]", FlashNoteCore.BuildImageEmbed("assets/测试图片.png"), "image embed defaults to 300px width")
+AssertTrue(InStr(imageBlock.Text, "来自example.com网页的剪藏。 #闪念`n`n![[assets/测试图片.png|300]]"), "image flash uses width-limited Obsidian embed")
 AssertTrue(InStr(imageBlock.Text, "记录日期:: 2026-08-12 15:35`n来源网址:: https://example.com/image"), "image flash metadata")
 imageTodo := FlashNoteCore.BuildImageFlashBlock("assets/测试图片.png", "", true, "20260812153501", "2a4b")
-AssertTrue(InStr(imageTodo.Text, "- [ ] 图片剪藏 #闪念 #待办  `n  ![[assets/测试图片.png]]"), "image todo keeps task semantics")
+AssertTrue(InStr(imageTodo.Text, "- [ ] 图片剪藏 #闪念 #待办  `n  ![[assets/测试图片.png|300]]"), "image todo keeps task semantics and width")
 AssertTrue(InStr(imageTodo.Text, "任务ID:: pc-20260812153501-2a4b"), "image todo task id")
 
 imageVault := testRoot "\image-vault"
@@ -156,7 +157,7 @@ AssertEqual(sourceImage, ImageClipboard.DetectImagePath(Chr(34) sourceImage Chr(
 savedImage := ImageClipboard.SaveToVault(imageVault, sourceImage, "20260812153600", "3b5c")
 AssertTrue(FileExist(savedImage.FullPath), "image copied into vault")
 AssertEqual("assets/大尾巴闪念图片-20260812-153600-3b5c.png", savedImage.RelativePath, "image vault relative path")
-AssertEqual("![[assets/大尾巴闪念图片-20260812-153600-3b5c.png]]", savedImage.Embed, "image Obsidian embed")
+AssertEqual("![[assets/大尾巴闪念图片-20260812-153600-3b5c.png|300]]", savedImage.Embed, "image Obsidian embed width")
 AssertTrue(savedImage.Created, "outside image marked created")
 insideImage := ImageClipboard.SaveToVault(imageVault, savedImage.FullPath)
 AssertEqual(FlashNoteCore.GetFullPath(savedImage.FullPath), insideImage.FullPath, "vault image is reused")

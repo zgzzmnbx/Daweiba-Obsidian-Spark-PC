@@ -71,7 +71,7 @@ class ImageClipboard {
             fullVault := RTrim(FlashNoteCore.GetFullPath(vaultPath), "\")
             fullSource := FlashNoteCore.GetFullPath(sourcePath)
             relativePath := StrReplace(SubStr(fullSource, StrLen(fullVault) + 2), "\", "/")
-            return {FullPath: fullSource, RelativePath: relativePath, Embed: "![[" relativePath "]]", Created: false, SourceKind: "file"}
+            return {FullPath: fullSource, RelativePath: relativePath, Embed: FlashNoteCore.BuildImageEmbed(relativePath), Created: false, SourceKind: "file"}
         }
 
         attachmentFolder := this.ResolveAttachmentFolder(vaultPath)
@@ -115,7 +115,7 @@ class ImageClipboard {
         relativePath := attachmentFolder.RelativePath = ""
             ? fileName
             : attachmentFolder.RelativePath "/" fileName
-        return {FullPath: targetPath, RelativePath: relativePath, Embed: "![[" relativePath "]]", Created: true, SourceKind: sourcePath != "" ? "file" : "bitmap"}
+        return {FullPath: targetPath, RelativePath: relativePath, Embed: FlashNoteCore.BuildImageEmbed(relativePath), Created: true, SourceKind: sourcePath != "" ? "file" : "bitmap"}
     }
 
     static SaveClipboardBitmapAsPng(targetPath) {
