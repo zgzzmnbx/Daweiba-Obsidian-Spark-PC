@@ -1,0 +1,9 @@
+# 本机配置与运行产物
+config.ini
+logs/
+Codex-Temp/
+
+# Windows 临时文件
+*.lnk
+Thumbs.db
+Desktop.ini
