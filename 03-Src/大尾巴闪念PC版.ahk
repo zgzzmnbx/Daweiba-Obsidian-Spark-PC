@@ -8,7 +8,7 @@ Persistent()
 #Include "lib\BrowserSource.ahk"
 
 class FlashNoteApp {
-    static Version := "0.4.0"
+    static Version := "0.4.1"
 
     __New() {
         SplitPath(A_ScriptDir, , &projectRoot)
@@ -128,19 +128,19 @@ class FlashNoteApp {
         settingsGui.Add("Button", "x+8 yp-1 w75", "修改").OnEvent("Click", (*) => this.ModifyAnchor())
 
         settingsGui.Add("GroupBox", "xm y+20 w620 h105", "全局快捷键")
-        this.NormalEnabledCheckbox := settingsGui.Add("CheckBox", "xm+14 yp+28 w85", "普通闪念")
+        this.NormalEnabledCheckbox := settingsGui.Add("CheckBox", "xm+14 yp+28 w85 h26", "普通闪念")
         this.NormalEnabledCheckbox.Value := this.Config.NormalEnabled
-        this.NormalHotkeyControl := settingsGui.Add("Hotkey", "x+0 yp-4 w90", this.Config.NormalHotkey)
-        this.TodoEnabledCheckbox := settingsGui.Add("CheckBox", "x+20 yp+4 w75", "保存待办")
+        this.NormalHotkeyControl := settingsGui.Add("Hotkey", "x+0 yp w90 h26", this.Config.NormalHotkey)
+        this.TodoEnabledCheckbox := settingsGui.Add("CheckBox", "x+20 yp w75 h26", "保存待办")
         this.TodoEnabledCheckbox.Value := this.Config.TodoEnabled
-        this.TodoHotkeyControl := settingsGui.Add("Hotkey", "x+0 yp-4 w90", this.Config.TodoHotkey)
-        this.NewNoteEnabledCheckbox := settingsGui.Add("CheckBox", "x+20 yp+4 w85", "新建笔记")
+        this.TodoHotkeyControl := settingsGui.Add("Hotkey", "x+0 yp w90 h26", this.Config.TodoHotkey)
+        this.NewNoteEnabledCheckbox := settingsGui.Add("CheckBox", "x+20 yp w85 h26", "新建笔记")
         this.NewNoteEnabledCheckbox.Value := this.Config.NewNoteEnabled
-        this.NewNoteHotkeyControl := settingsGui.Add("Hotkey", "x+0 yp-4 w90", this.Config.NewNoteHotkey)
+        this.NewNoteHotkeyControl := settingsGui.Add("Hotkey", "x+0 yp w90 h26", this.Config.NewNoteHotkey)
         this.NormalEnabledCheckbox.OnEvent("Click", (*) => this.UpdateHotkeyControlStates())
         this.TodoEnabledCheckbox.OnEvent("Click", (*) => this.UpdateHotkeyControlStates())
         this.NewNoteEnabledCheckbox.OnEvent("Click", (*) => this.UpdateHotkeyControlStates())
-        settingsGui.Add("Text", "xm+14 y+16 w580 c666666", "勾选表示启用；默认启用普通闪念和新建笔记，已启用项不得重复。")
+        settingsGui.Add("Text", "xm+14 y+13 w580 c666666", "勾选表示启用；默认启用普通闪念和新建笔记，已启用项不得重复。")
 
         settingsGui.Add("GroupBox", "xm y+20 w620 h174", "内容格式、网页来源与启动")
         this.SourceUrlCheckbox := settingsGui.Add("CheckBox", "xm+14 yp+27", "自动附加网页来源网址")
@@ -742,6 +742,22 @@ if (uiSmokeCheck || newNoteSmokeCheck) {
             throw Error("enabled hotkey registration count mismatch")
         if DabaweiFlashNoteApp.TodoHotkeyControl.Enabled
             throw Error("disabled todo hotkey control remains enabled")
+        hotkeyRowPositions := []
+        for control in [
+            DabaweiFlashNoteApp.NormalEnabledCheckbox,
+            DabaweiFlashNoteApp.NormalHotkeyControl,
+            DabaweiFlashNoteApp.TodoEnabledCheckbox,
+            DabaweiFlashNoteApp.TodoHotkeyControl,
+            DabaweiFlashNoteApp.NewNoteEnabledCheckbox,
+            DabaweiFlashNoteApp.NewNoteHotkeyControl
+        ] {
+            control.GetPos(&controlX, &controlY, &controlWidth, &controlHeight)
+            hotkeyRowPositions.Push({Y: controlY, Height: controlHeight})
+        }
+        for position in hotkeyRowPositions {
+            if (position.Y != hotkeyRowPositions[1].Y || position.Height != 26)
+                throw Error("hotkey switch row alignment mismatch")
+        }
         if (DabaweiFlashNoteApp.LinkNewNoteCheckbox.Value != 1)
             throw Error("new note link switch is not enabled")
         DabaweiFlashNoteApp.ShowUsageGuide()
